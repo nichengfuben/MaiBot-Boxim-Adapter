@@ -1,0 +1,37 @@
+[inner]
+version = "0.1.0"
+
+[nickname]
+nickname = "MaiBot"
+
+[boxim]
+username = "your_boxim_username"
+password = "your_boxim_password"
+base_url = "https://www.boxim.online"
+ws_url = "wss://www.boxim.online/im"
+
+[maibot_server]
+host = "localhost"
+port = 8000
+enable_api_server = false
+base_url = "ws://localhost:8000/ws"
+api_key = "maibot"
+
+[chat]
+group_list_type = "blacklist"
+group_list = []
+private_list_type = "blacklist"
+private_list = []
+ban_user_id = []
+
+[media]
+download_timeout = 30
+
+[sticker]
+download_as_emoji = true
+
+[voice]
+use_tts = true
+
+[debug]
+level = "INFO"
