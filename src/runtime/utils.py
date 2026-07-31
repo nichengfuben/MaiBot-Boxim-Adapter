@@ -7,7 +7,7 @@ import ssl
 from PIL import Image
 from typing import Union, Optional
 
-from .logger import logger
+from src.runtime.logger import logger
 
 
 class SSLAdapter(urllib3.PoolManager):

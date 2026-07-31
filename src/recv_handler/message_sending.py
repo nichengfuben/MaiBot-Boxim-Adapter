@@ -1,6 +1,6 @@
 from typing import Dict
 import json
-from src.logger import logger
+from src.runtime.logger import logger
 from maim_message import MessageBase
 
 

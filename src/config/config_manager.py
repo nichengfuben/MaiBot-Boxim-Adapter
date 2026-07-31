@@ -14,7 +14,7 @@ _logger = None
 def _get_logger():
     global _logger
     if _logger is None:
-        from ..logger import logger
+        from src.runtime.logger import logger
         _logger = logger
     return _logger
 
@@ -97,32 +97,31 @@ class ConfigManager:
         _get_logger().debug(f"已注册配置变更回调: {config_path}")
 
     async def _notify_changes(self, old_config: Config, new_config: Config) -> None:
-        """通知配置变更
-        
-        Args:
-            old_config: 旧配置对象
-            new_config: 新配置对象
-        """
+        """通知配置变更。"""
         for config_path, callbacks in self._callbacks.items():
             try:
                 old_value = self._get_value(old_config, config_path)
                 new_value = self._get_value(new_config, config_path)
-                
-                if old_value != new_value:
-                    _get_logger().info(f"检测到配置变更: {config_path}")
-                    for callback in callbacks:
-                        try:
-                            if asyncio.iscoroutinefunction(callback):
-                                await callback(old_value, new_value)
-                            else:
-                                callback(old_value, new_value)
-                        except Exception as e:
-                            _get_logger().error(
-                                f"配置变更回调执行失败 [{config_path}]: {e}",
-                                exc_info=True
-                            )
             except Exception as e:
                 _get_logger().error(f"获取配置值失败 [{config_path}]: {e}")
+                continue
+            if old_value == new_value:
+                continue
+            _get_logger().info(f"检测到配置变更: {config_path}")
+            await self._run_callbacks(config_path, callbacks, old_value, new_value)
+
+    async def _run_callbacks(self, config_path, callbacks, old_value, new_value) -> None:
+        for callback in callbacks:
+            try:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(old_value, new_value)
+                else:
+                    callback(old_value, new_value)
+            except Exception as e:
+                _get_logger().error(
+                    f"配置变更回调执行失败 [{config_path}]: {e}",
+                    exc_info=True,
+                )
 
     def _get_value(self, config: Config, path: str) -> Any:
         """获取嵌套配置值

@@ -52,69 +52,74 @@ def get_current_config_version():
 
 
 def update_config():
-    from src.logger import logger
+    from src.runtime.logger import logger
 
     template_path = f"{TEMPLATE_DIR}/template_config.toml"
     old_config_path = "config.toml"
-    new_config_path = "config.toml"
-
     if not os.path.exists(old_config_path):
         logger.info("配置文件不存在，从模板创建新配置")
         shutil.copy2(template_path, old_config_path)
         logger.info(f"已创建新配置文件，请填写后重新运行: {old_config_path}")
         quit()
-
     with open(old_config_path, "r", encoding="utf-8") as f:
         old_config = tomlkit.load(f)
     with open(template_path, "r", encoding="utf-8") as f:
         new_config = tomlkit.load(f)
+    if not _should_update_config(old_config, new_config, logger):
+        return
+    _backup_and_merge(old_config_path, template_path, old_config, new_config, logger)
+    _restart_process()
 
+
+def _should_update_config(old_config, new_config, logger) -> bool:
     if old_config and "inner" in old_config and "inner" in new_config:
         old_version = old_config["inner"].get("version")
         new_version = new_config["inner"].get("version")
         if old_version and new_version and old_version == new_version:
             logger.info(f"检测到配置文件版本号相同 (v{old_version})，跳过更新")
-            return
-        else:
-            logger.info(f"检测到版本号不同: 旧版本 v{old_version} -> 新版本 v{new_version}")
-    else:
-        logger.info("已有配置文件未检测到版本号，可能是旧版本。将进行更新")
+            return False
+        logger.info(f"检测到版本号不同: 旧版本 v{old_version} -> 新版本 v{new_version}")
+        return True
+    logger.info("已有配置文件未检测到版本号，可能是旧版本。将进行更新")
+    return True
 
+
+def _set_toml_value(target, key, value) -> None:
+    try:
+        if isinstance(value, list):
+            target[key] = tomlkit.array(str(value)) if value else tomlkit.array()
+        else:
+            target[key] = tomlkit.item(value)
+    except (TypeError, ValueError):
+        target[key] = value
+
+
+def update_dict(target: TOMLDocument | dict, source: TOMLDocument | dict):
+    for key, value in source.items():
+        if key == "version":
+            continue
+        if key not in target:
+            continue
+        if isinstance(value, dict) and isinstance(target[key], (dict, Table)):
+            update_dict(target[key], value)
+            continue
+        _set_toml_value(target, key, value)
+
+
+def _backup_and_merge(old_config_path, template_path, old_config, new_config, logger):
     backup_dir = "config_backup"
     os.makedirs(backup_dir, exist_ok=True)
-
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     old_backup_path = os.path.join(backup_dir, f"config.toml.bak.{timestamp}")
-
     shutil.copy2(old_config_path, old_backup_path)
     logger.info(f"已备份旧配置文件到: {old_backup_path}")
-
-    shutil.copy2(template_path, new_config_path)
-    logger.info(f"已创建新配置文件: {new_config_path}")
-
-    def update_dict(target: TOMLDocument | dict, source: TOMLDocument | dict):
-        for key, value in source.items():
-            if key == "version":
-                continue
-            if key in target:
-                if isinstance(value, dict) and isinstance(target[key], (dict, Table)):
-                    update_dict(target[key], value)
-                else:
-                    try:
-                        if isinstance(value, list):
-                            target[key] = tomlkit.array(str(value)) if value else tomlkit.array()
-                        else:
-                            target[key] = tomlkit.item(value)
-                    except (TypeError, ValueError):
-                        target[key] = value
-
+    shutil.copy2(template_path, "config.toml")
+    logger.info("已创建新配置文件: config.toml")
     logger.info("开始合并新旧配置...")
     update_dict(new_config, old_config)
-
-    with open(new_config_path, "w", encoding="utf-8") as f:
+    with open("config.toml", "w", encoding="utf-8") as f:
         f.write(tomlkit.dumps(new_config))
     logger.info("配置文件更新完成，建议检查新配置文件中的内容，以免丢失重要信息")
-    _restart_process()
 
 
 @dataclass
@@ -132,7 +137,7 @@ class Config(ConfigBase):
 
 
 def load_config(config_path: str) -> Config:
-    from src.logger import logger
+    from src.runtime.logger import logger
 
     with open(config_path, "r", encoding="utf-8") as f:
         config_data = tomlkit.load(f)
@@ -146,7 +151,7 @@ def load_config(config_path: str) -> Config:
 
 update_config()
 
-from src.logger import logger
+from src.runtime.logger import logger
 
 logger.info("正在品鉴配置文件...")
 

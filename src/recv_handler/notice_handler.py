@@ -3,7 +3,7 @@ import json
 import asyncio
 from typing import Tuple, Optional
 
-from src.logger import logger
+from src.runtime.logger import logger
 from src.config import global_config
 from . import NoticeType, ACCEPT_FORMAT
 from .message_sending import message_send_instance
@@ -63,39 +63,32 @@ class NoticeHandler:
         if not handled_message or not user_info:
             logger.warning("系统消息处理失败")
             return None
+        await self._forward_notice(handled_message, user_info, group_id, message_time, msg_data)
 
-        group_info: GroupInfo = None
+    async def _forward_notice(self, handled_message, user_info, group_id, message_time, msg_data):
+        group_info = None
         if group_id:
             group_info = GroupInfo(
                 platform=global_config.maibot_server.platform_name,
                 group_id=group_id,
                 group_name="",
             )
-
         message_info = BaseMessageInfo(
             platform=global_config.maibot_server.platform_name,
             message_id="notice",
             time=message_time,
             user_info=user_info,
             group_info=group_info,
-            sender_info=SenderInfo(
-                group_info=group_info,
-                user_info=user_info,
-            ),
+            sender_info=SenderInfo(group_info=group_info, user_info=user_info),
             template_info=None,
-            format_info=FormatInfo(
-                content_format=["text"],
-                accept_format=ACCEPT_FORMAT,
-            ),
+            format_info=FormatInfo(content_format=["text"], accept_format=ACCEPT_FORMAT),
             additional_config={},
         )
-
         message_base = MessageBase(
             message_info=message_info,
             message_segment=handled_message,
             raw_message=json.dumps(msg_data, ensure_ascii=False),
         )
-
         logger.info("发送到 MaiBot 处理通知信息")
         await message_send_instance.message_send(message_base)
 

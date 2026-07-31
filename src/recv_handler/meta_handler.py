@@ -1,4 +1,4 @@
-from src.logger import logger
+from src.runtime.logger import logger
 from src.config import global_config
 import time
 import asyncio
@@ -50,4 +50,4 @@ class MetaEventHandler:
             await asyncio.sleep(self.interval)
 
 
-meta_event_handler = MetaEventHandler()
+meta_handler = MetaEventHandler()

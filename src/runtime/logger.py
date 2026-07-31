@@ -4,7 +4,7 @@ from datetime import datetime
 import logging
 
 # 日志目录配置
-LOG_DIR = Path(__file__).parent.parent / "logs"
+LOG_DIR = Path(__file__).resolve().parents[2] / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
 # 清理过期日志

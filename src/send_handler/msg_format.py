@@ -1,9 +1,9 @@
 from maim_message import Seg, MessageBase
 from typing import List, Dict
 
-from src.logger import logger
+from src.runtime.logger import logger
 from src.config import global_config
-from src.utils import get_image_format, convert_image_to_gif
+from src.runtime.utils import get_image_format, convert_image_to_gif
 
 
 class SendMessageHandleClass:
@@ -27,56 +27,32 @@ class SendMessageHandleClass:
 
     @classmethod
     def process_message_by_type(cls, seg: Seg, payload: List, in_forward: bool = False) -> List:
-        new_payload = payload
-        if seg.type == "reply":
-            target_id = seg.data
-            if target_id == "notice":
-                return payload
-            new_payload = cls.build_payload(payload, cls.handle_reply_message(target_id), True)
-        elif seg.type == "text":
-            text = seg.data
-            if not text:
-                return payload
-            new_payload = cls.build_payload(payload, cls.handle_text_message(text), False)
-        elif seg.type == "at":
-            at_data = seg.data
-            new_payload = cls.build_payload(payload, cls.handle_at_message(at_data), False)
-        elif seg.type == "face":
-            face_id = seg.data
-            new_payload = cls.build_payload(payload, cls.handle_native_face_message(face_id), False)
-        elif seg.type == "image":
-            image = seg.data
-            new_payload = cls.build_payload(payload, cls.handle_image_message(image), False)
-        elif seg.type == "emoji":
-            emoji = seg.data
-            new_payload = cls.build_payload(payload, cls.handle_emoji_message(emoji), False)
-        elif seg.type == "voice":
-            voice = seg.data
-            new_payload = cls.build_payload(payload, cls.handle_voice_message(voice), False)
-        elif seg.type == "voiceurl":
-            voice_url = seg.data
-            new_payload = cls.build_payload(payload, cls.handle_voiceurl_message(voice_url), False)
-        elif seg.type == "music":
-            music_data = seg.data
-            new_payload = cls.build_payload(payload, cls.handle_music_message(music_data), False)
-        elif seg.type == "videourl":
-            video_url = seg.data
-            new_payload = cls.build_payload(payload, cls.handle_videourl_message(video_url), False)
-        elif seg.type == "file":
-            file_path = seg.data
-            new_payload = cls.build_payload(payload, cls.handle_file_message(file_path), False)
-        elif seg.type == "imageurl":
-            image_url = seg.data
-            new_payload = cls.build_payload(payload, cls.handle_imageurl_message(image_url), False)
-        elif seg.type == "video":
-            video_path = seg.data
-            new_payload = cls.build_payload(payload, cls.handle_video_message(video_path), False)
-        elif seg.type == "forward" and not in_forward:
-            forward_message_content: List[Dict] = seg.data
-            new_payload: List[Dict] = [
-                cls.handle_forward_message(MessageBase.from_dict(item)) for item in forward_message_content
-            ]
-        return new_payload
+        handlers = {
+            "reply": (cls.handle_reply_message, True),
+            "text": (cls.handle_text_message, False),
+            "at": (cls.handle_at_message, False),
+            "face": (cls.handle_native_face_message, False),
+            "image": (cls.handle_image_message, False),
+            "emoji": (cls.handle_emoji_message, False),
+            "voice": (cls.handle_voice_message, False),
+            "voiceurl": (cls.handle_voiceurl_message, False),
+            "music": (cls.handle_music_message, False),
+            "videourl": (cls.handle_videourl_message, False),
+            "file": (cls.handle_file_message, False),
+            "imageurl": (cls.handle_imageurl_message, False),
+            "video": (cls.handle_video_message, False),
+        }
+        if seg.type == "reply" and seg.data == "notice":
+            return payload
+        if seg.type == "text" and not seg.data:
+            return payload
+        if seg.type == "forward" and not in_forward:
+            return [cls.handle_forward_message(MessageBase.from_dict(i)) for i in seg.data]
+        entry = handlers.get(seg.type)
+        if not entry:
+            return payload
+        handler, prepend = entry
+        return cls.build_payload(payload, handler(seg.data), prepend)
 
     @classmethod
     def handle_forward_message(cls, item: MessageBase) -> Dict:

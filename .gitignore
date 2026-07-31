@@ -1,11 +1,14 @@
-__pycache__/
+﻿__pycache__/
 *.pyc
 .venv/
 venv/
 logs/
-data/*.json
+**/logs/
+data/
+**/data/
 config.toml
 .env
 *.log
 .DS_Store
 abnormis.txt
+.agents/

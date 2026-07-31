@@ -57,6 +57,7 @@ EXEMPT_SUBTREE_PREFIXES: Tuple[Tuple[str, ...], ...] = (
     ("provider-core", "plugins"),
     ("provider-core", "persist"),
     ("logs",),
+    ("data",),
     ("persist",),
     ("template",),
     ("tmp",),
@@ -455,7 +456,17 @@ def is_exempt_subtree(root: Path, directory: Path) -> bool:
     if any(part.startswith(".") for part in parts):
         return True
     # <--- 修改：添加 "emoji_assets"、"__pycache__" 到豁免目录名列表
-    exempt_dir_names = {"logs", "docs-src", "tests", "template", "tmp", "vendor", "emoji_assets", "__pycache__"}
+    exempt_dir_names = {
+        "logs",
+        "data",
+        "docs-src",
+        "tests",
+        "template",
+        "tmp",
+        "vendor",
+        "emoji_assets",
+        "__pycache__",
+    }
     if directory.name in exempt_dir_names:
         return True
     for prefix in EXEMPT_SUBTREE_PREFIXES:
@@ -481,7 +492,7 @@ def _is_file_exempt_for_lines(root: Path, filepath: Path) -> bool:
         return True
     # <--- 修改：检查父目录是否为 emoji_assets
     for parent in filepath.parents:
-        if parent.name in {"logs", "docs-src", "tests", "template", "tmp", "vendor", "emoji_assets"}:
+        if parent.name in {"logs", "docs-src", "tests", "template", "tmp", "vendor", "emoji_assets", "data"}:
             return True
     for prefix in FILE_EXEMPT_SUBTREE_PREFIXES:
         if len(parts) >= len(prefix) and parts[:len(prefix)] == prefix:
@@ -496,8 +507,9 @@ def _is_init_py(filepath: Path) -> bool:
 def countable_children(directory: Path) -> List[Path]:
     children: List[Path] = []
     script_path = Path(__file__).resolve()
+    skip_names = RUNTIME_DIR_NAMES | {"data", "logs"}
     for item in directory.iterdir():
-        if item.name in RUNTIME_DIR_NAMES:
+        if item.name in skip_names:
             continue
         if item.is_file() and item.suffix in RUNTIME_FILE_SUFFIXES:
             continue

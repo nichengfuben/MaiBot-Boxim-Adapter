@@ -1,6 +1,6 @@
-from .main_send_handler import send_handler
-from .send_command_handler import SendCommandHandleClass, register_command
-from .send_message_handler import SendMessageHandleClass
+from .dispatch import send_handler
+from .cmd_api import SendCommandHandleClass, register_command
+from .msg_format import SendMessageHandleClass
 from .im_sending import boxim_message_sender
 
 __all__ = [

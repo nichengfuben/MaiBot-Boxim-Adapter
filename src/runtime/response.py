@@ -1,8 +1,8 @@
 import asyncio
 import time
 from typing import Dict
-from .config import global_config
-from .logger import logger
+from src.config import global_config
+from src.runtime.logger import logger
 
 response_dict: Dict = {}
 response_time_dict: Dict = {}
