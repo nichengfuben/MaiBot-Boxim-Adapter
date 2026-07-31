@@ -24,7 +24,7 @@ _shutdown_event: asyncio.Event | None = None
 
 
 async def boxim_message_handler(msg_data, is_group):
-    """Handle messages received from BoxIM WebSocket."""
+    """BoxIM 实时消息回调：只入队，由 message_process 在 MMC 就绪后处理。"""
     try:
         message_id = msg_data.get("id")
         msg_type = msg_data.get("type", 0)
@@ -33,14 +33,16 @@ async def boxim_message_handler(msg_data, is_group):
             if msg_type in no_id:
                 msg_data["post_type"] = "notice"
                 msg_data["notice_type"] = "notify"
-                await notice_handler.handle_notice(msg_data)
+                await message_queue.put(msg_data)
                 return
             logger.warning(
                 f"BoxIM 消息缺少 id, type={msg_type}, keys={list(msg_data.keys())}, "
                 f"data={json.dumps(msg_data, ensure_ascii=False)}"
             )
             return
-        await message_handler.handle_boxim_message(msg_data, is_group)
+        msg_data["post_type"] = "message"
+        msg_data["is_group"] = is_group
+        await message_queue.put(msg_data)
     except Exception as e:
         logger.error(f"Error handling BoxIM message: {e}")
         import traceback
@@ -51,19 +53,23 @@ async def boxim_message_handler(msg_data, is_group):
 async def message_process():
     """Process messages from the queue."""
     await mmc_ready.wait()
+    logger.info("MMC 已就绪，开始处理消息队列")
     while True:
         message = await message_queue.get()
-        post_type = message.get("post_type")
-        if post_type == "message":
-            await message_handler.handle_boxim_message(
-                message, message.get("is_group", False)
-            )
-        elif post_type == "meta_event":
-            await meta_handler.handle_meta_event(message)
-        elif post_type == "notice":
-            await notice_handler.handle_notice(message)
-        else:
-            logger.warning(f"Unknown post_type: {post_type}")
+        try:
+            post_type = message.get("post_type")
+            if post_type == "message":
+                await message_handler.handle_boxim_message(
+                    message, message.get("is_group", False)
+                )
+            elif post_type == "meta_event":
+                await meta_handler.handle_meta_event(message)
+            elif post_type == "notice":
+                await notice_handler.handle_notice(message)
+            else:
+                logger.warning(f"Unknown post_type: {post_type}")
+        except Exception as e:
+            logger.error(f"消息处理异常 [{message.get('post_type')}]: {e}")
         message_queue.task_done()
 
 

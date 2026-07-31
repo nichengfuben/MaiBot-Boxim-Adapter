@@ -5,7 +5,8 @@ from src.send_handler.dispatch import send_handler
 from src.recv_handler.message_sending import message_send_instance
 from maim_message.client import create_client_config, WebSocketClient
 from maim_message.message import APIMessageBase
-from typing import Dict, Any
+from typing import Callable, Dict, Any
+import asyncio
 import importlib.metadata
 
 # Check maim_message version for MessageConverter support (>= 0.7.5)
@@ -65,6 +66,16 @@ async def _on_api_message(message: APIMessageBase, metadata: Dict[str, Any]):
         logger.error(traceback.format_exc())
 
 
+async def _signal_ready_when(check: Callable[[], bool], label: str) -> None:
+    """等 MaiBot WebSocket 真正连上后再开放消息队列。"""
+    from src.runtime.lifecycle import mmc_ready
+
+    while not check():
+        await asyncio.sleep(0.1)
+    mmc_ready.set()
+    logger.info(f"MMC {label} 已连接，开始处理消息队列")
+
+
 async def _start_api_mode(config) -> None:
     global router
     client_config = create_client_config(
@@ -74,19 +85,28 @@ async def _start_api_mode(config) -> None:
         on_message=_on_api_message,
         custom_logger=custom_logger,
     )
-    router = APIServerWrapper(WebSocketClient(client_config))
+    client = WebSocketClient(client_config)
+    router = APIServerWrapper(client)
     _unify_external_loggers()
     message_send_instance.maibot_router = router
-    from src.runtime.lifecycle import mmc_ready
-    mmc_ready.set()
-    await router.run()
+    ready_task = asyncio.create_task(
+        _signal_ready_when(client.is_connected, "API WebSocket")
+    )
+    try:
+        await router.run()
+        # connect() 返回后连接由后台维持；保持任务存活避免主循环误判退出
+        while True:
+            await asyncio.sleep(3600)
+    finally:
+        ready_task.cancel()
 
 
 async def _start_legacy_mode(config) -> None:
     global router
+    platform = config.platform_name
     route_config = RouteConfig(
         route_config={
-            config.platform_name: TargetConfig(
+            platform: TargetConfig(
                 url=f"ws://{config.host}:{config.port}/ws",
                 token=None,
             )
@@ -96,9 +116,13 @@ async def _start_legacy_mode(config) -> None:
     _unify_external_loggers()
     router.register_class_handler(send_handler.handle_message)
     message_send_instance.maibot_router = router
-    from src.runtime.lifecycle import mmc_ready
-    mmc_ready.set()
-    await router.run()
+    ready_task = asyncio.create_task(
+        _signal_ready_when(lambda: router.check_connection(platform), "WebSocket")
+    )
+    try:
+        await router.run()
+    finally:
+        ready_task.cancel()
 
 
 async def mmc_start_com():
