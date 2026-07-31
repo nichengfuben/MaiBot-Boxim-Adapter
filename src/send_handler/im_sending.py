@@ -430,10 +430,12 @@ class BoxIMMessageSender:
 
     # === 群组管理 ===
 
-    async def create_group(self, name: str, member_ids: list) -> dict:
-        """创建群"""
+    async def create_group(self, name: str, member_ids: list = None) -> dict:
+        """创建群（boxim-sdk 3.2+：创建仅传名称，成员需再邀请）。"""
         try:
-            g = await self.boxim_client.acreate_group(name, member_ids)
+            g = await self.boxim_client.acreate_group(name)
+            if member_ids:
+                await self.boxim_client.ainvite_to_group(g.id, member_ids)
             return {"id": g.id, "name": g.name}
         except Exception as e:
             logger.error(f"创建群失败: {e}")
@@ -1057,6 +1059,28 @@ class BoxIMMessageSender:
             return False
         except Exception as e:
             logger.error(f"更新个人资料失败: {e}")
+            return False
+
+    # === 实名认证 ===
+
+    async def get_realname_auth_info(self) -> dict:
+        """获取实名认证信息"""
+        try:
+            return await self.boxim_client.aget_realname_auth_info()
+        except Exception as e:
+            logger.error(f"获取实名认证信息失败: {e}")
+            return {"error": str(e)}
+
+    async def submit_realname_auth(self, real_name: str, id_card: str) -> bool:
+        """提交实名认证"""
+        try:
+            await self.boxim_client.asubmit_realname_auth(real_name, id_card)
+            return True
+        except BoxIMError as e:
+            logger.error(f"提交实名认证失败 (code={e.code}): {e.message}")
+            return False
+        except Exception as e:
+            logger.error(f"提交实名认证失败: {e}")
             return False
 
 

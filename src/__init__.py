@@ -107,6 +107,10 @@ class CommandType(Enum):
     # 个人资料
     UPDATE_PROFILE = "update_profile"
 
+    # 实名认证
+    GET_REALNAME_AUTH_INFO = "get_realname_auth_info"
+    SUBMIT_REALNAME_AUTH = "submit_realname_auth"
+
     def __str__(self) -> str:
         return self.value
 

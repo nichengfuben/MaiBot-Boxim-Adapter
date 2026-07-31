@@ -910,3 +910,24 @@ class SendCommandHandleClass:
         if not fields:
             raise ValueError("Missing profile fields (signature/nickName/sex/headImage)")
         return (CommandType.UPDATE_PROFILE.value, fields)
+
+    # === 实名认证 ===
+
+    @staticmethod
+    @register_command(CommandType.GET_REALNAME_AUTH_INFO, require_group=False)
+    def handle_get_realname_auth_info_command(args: Dict[str, Any], group_info) -> tuple:
+        return (CommandType.GET_REALNAME_AUTH_INFO.value, {})
+
+    @staticmethod
+    @register_command(CommandType.SUBMIT_REALNAME_AUTH, require_group=False)
+    def handle_submit_realname_auth_command(args: Dict[str, Any], group_info) -> tuple:
+        real_name = args.get("real_name")
+        id_card = args.get("id_card")
+        if not real_name:
+            raise ValueError("Missing: real_name")
+        if not id_card:
+            raise ValueError("Missing: id_card")
+        return (
+            CommandType.SUBMIT_REALNAME_AUTH.value,
+            {"real_name": str(real_name), "id_card": str(id_card)},
+        )

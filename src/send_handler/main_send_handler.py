@@ -118,7 +118,7 @@ class SendHandler:
                        "get_private_message_history", "get_group_message_history",
                        "load_private_offline_message", "load_group_offline_message", "load_system_offline_message",
                        "get_sticker_albums", "get_stickers", "search_stickers", "get_custom_stickers",
-                       "get_system_message_content", "submit_complaint"]:
+                       "get_system_message_content", "submit_complaint", "get_realname_auth_info"]:
             result = await self._execute_query_command(command, params_dict)
 
             if result and "error" in result:
@@ -214,6 +214,8 @@ class SendHandler:
                     params["target_type"], params["target_id"],
                     params.get("complaint_type", 99), params["content"],
                     params.get("target_name", ""), params.get("images", []))
+            elif command == "get_realname_auth_info":
+                return await boxim_message_sender.get_realname_auth_info()
             return {}
         except Exception as e:
             logger.error(f"Query command {command} failed: {e}")
@@ -240,7 +242,7 @@ class SendHandler:
                 return await boxim_message_sender.recall_message(msg_id, is_group=is_group)
             elif command == "create_group":
                 return await boxim_message_sender.create_group(
-                    params["name"], params["member_ids"]
+                    params["name"], params.get("member_ids") or []
                 )
             elif command == "join_group":
                 return await boxim_message_sender.join_group(
@@ -355,6 +357,10 @@ class SendHandler:
                 return await boxim_message_sender.top_custom_sticker(params["sticker_id"])
             elif command == "update_profile":
                 return await boxim_message_sender.update_profile(**params)
+            elif command == "submit_realname_auth":
+                return await boxim_message_sender.submit_realname_auth(
+                    params["real_name"], params["id_card"]
+                )
             else:
                 logger.warning(f"Unknown command: {command}")
                 return False
