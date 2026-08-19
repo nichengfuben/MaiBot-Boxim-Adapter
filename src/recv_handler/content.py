@@ -238,9 +238,12 @@ async def _parse_recall(handler: Any, content: str, msg_data: dict, segs: List[S
         Seg(
             type="notify",
             data={
+                "notice_type": "recall",
                 "sub_type": "group_recall" if is_group else "friend_recall",
-                "message_id": msg_data.get("recallMessageId") or msg_data.get("id"),
-                "recalled_user_info": recalled_user_info,
+                "payload": {
+                    "message_id": msg_data.get("recallMessageId") or msg_data.get("id"),
+                    "recalled_user_info": recalled_user_info,
+                },
             },
         )
     )

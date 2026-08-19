@@ -253,6 +253,27 @@ class MessageHandler:
     ):
         submit_seg = Seg(type="seglist", data=seg_message)
         sender_info = SenderInfo(group_info=group_info, user_info=user_info)
+        # 根据实际消息内容动态设置 content_format
+        content_types = set()
+        for seg in seg_message:
+            if seg.type == "text":
+                content_types.add("text")
+            elif seg.type == "image":
+                content_types.add("image")
+            elif seg.type == "emoji":
+                content_types.add("emoji")
+            elif seg.type == "voice":
+                content_types.add("voice")
+            elif seg.type == "file":
+                content_types.add("file")
+            elif seg.type == "reply":
+                content_types.add("reply")
+            elif seg.type == "at":
+                content_types.add("at")
+            elif seg.type == "notify":
+                content_types.add("notify")
+        if not content_types:
+            content_types.add("text")
         message_info = BaseMessageInfo(
             platform=global_config.maibot_server.platform_name,
             message_id=message_id,
@@ -262,7 +283,7 @@ class MessageHandler:
             sender_info=sender_info,
             template_info=None,
             format_info=FormatInfo(
-                content_format=["text", "image", "emoji", "voice"],
+                content_format=list(content_types),
                 accept_format=ACCEPT_FORMAT,
             ),
             additional_config=additional_config,

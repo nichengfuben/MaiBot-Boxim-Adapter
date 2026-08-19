@@ -66,6 +66,7 @@ class NoticeHandler:
         await self._forward_notice(handled_message, user_info, group_id, message_time, msg_data)
 
     async def _forward_notice(self, handled_message, user_info, group_id, message_time, msg_data):
+        import random
         group_info = None
         if group_id:
             group_info = GroupInfo(
@@ -73,15 +74,17 @@ class NoticeHandler:
                 group_id=group_id,
                 group_name="",
             )
+        # 生成唯一消息 ID 避免去重冲突
+        notice_id = f"notice_{int(message_time * 1000)}_{random.randint(1000, 9999)}"
         message_info = BaseMessageInfo(
             platform=global_config.maibot_server.platform_name,
-            message_id="notice",
+            message_id=notice_id,
             time=message_time,
             user_info=user_info,
             group_info=group_info,
             sender_info=SenderInfo(group_info=group_info, user_info=user_info),
             template_info=None,
-            format_info=FormatInfo(content_format=["text"], accept_format=ACCEPT_FORMAT),
+            format_info=FormatInfo(content_format=["notify"], accept_format=ACCEPT_FORMAT),
             additional_config={},
         )
         message_base = MessageBase(
@@ -89,7 +92,7 @@ class NoticeHandler:
             message_segment=handled_message,
             raw_message=json.dumps(msg_data, ensure_ascii=False),
         )
-        logger.info("发送到 MaiBot 处理通知信息")
+        logger.info(f"发送到 MaiBot 处理通知信息: {notice_id}")
         await message_send_instance.message_send(message_base)
 
     async def _handle_friend_request(self, msg_data: dict, msg_type: int) -> Tuple[Seg | None, UserInfo | None]:
@@ -107,14 +110,25 @@ class NoticeHandler:
         from sdk import BoxIMMessageType as BoxIMType
 
         type_map = {
-            BoxIMType.FRIEND_REQ_APPLY: "发送了好友请求",
-            BoxIMType.FRIEND_REQ_APPROVE: "通过了好友请求",
-            BoxIMType.FRIEND_REQ_REJECT: "拒绝了好友请求",
-            BoxIMType.FRIEND_REQ_RECALL: "撤回了好友请求",
+            BoxIMType.FRIEND_REQ_APPLY: ("friend_request_apply", "发送了好友请求"),
+            BoxIMType.FRIEND_REQ_APPROVE: ("friend_request_approve", "通过了好友请求"),
+            BoxIMType.FRIEND_REQ_REJECT: ("friend_request_reject", "拒绝了好友请求"),
+            BoxIMType.FRIEND_REQ_RECALL: ("friend_request_recall", "撤回了好友请求"),
         }
-        action = type_map.get(msg_type, "好友请求变动")
+        sub_type, action = type_map.get(msg_type, ("friend_request", "好友请求变动"))
 
-        return Seg(type="text", data=f"（通知：{send_nick} {action}）"), user_info
+        return Seg(
+            type="notify",
+            data={
+                "notice_type": "friend_request",
+                "sub_type": sub_type,
+                "payload": {
+                    "user_id": sender_id,
+                    "user_nickname": send_nick,
+                    "action": action,
+                },
+            },
+        ), user_info
 
     async def _handle_friend_event(
         self, msg_data: dict, notice_subtype: str, action_text: str
@@ -130,7 +144,18 @@ class NoticeHandler:
             user_cardname=None,
         )
 
-        return Seg(type="text", data=f"（通知：{send_nick} {action_text}）"), user_info
+        return Seg(
+            type="notify",
+            data={
+                "notice_type": "friend_event",
+                "sub_type": notice_subtype,
+                "payload": {
+                    "user_id": sender_id,
+                    "user_nickname": send_nick,
+                    "action": action_text,
+                },
+            },
+        ), user_info
 
     async def _handle_group_event(
         self, msg_data: dict, notice_subtype: str, action_text: str
@@ -147,7 +172,19 @@ class NoticeHandler:
             user_cardname=None,
         )
 
-        return Seg(type="text", data=f"（通知：{send_nick} {action_text}）"), user_info
+        return Seg(
+            type="notify",
+            data={
+                "notice_type": "group_event",
+                "sub_type": notice_subtype,
+                "payload": {
+                    "user_id": sender_id,
+                    "user_nickname": send_nick,
+                    "group_id": group_id,
+                    "action": action_text,
+                },
+            },
+        ), user_info
 
     async def _handle_group_info_change(self, msg_data: dict) -> Tuple[Seg | None, UserInfo | None]:
         """处理群信息变更通知"""
@@ -164,20 +201,38 @@ class NoticeHandler:
         )
 
         # 尝试解析群信息变更内容
+        new_name = None
         try:
             info = json.loads(content)
             new_name = info.get("group_name") or info.get("name")
-            if new_name:
-                return Seg(type="text", data=f"（通知：{send_nick} 修改群名称为: {new_name}）"), user_info
         except Exception:
             pass
 
-        return Seg(type="text", data=f"（通知：群信息变更）"), user_info
+        payload = {
+            "user_id": sender_id,
+            "user_nickname": send_nick,
+            "group_id": group_id,
+        }
+        if new_name:
+            payload["new_name"] = new_name
+            payload["action"] = f"修改群名称为: {new_name}"
+        else:
+            payload["action"] = "群信息变更"
+
+        return Seg(
+            type="notify",
+            data={
+                "notice_type": "group_info_change",
+                "sub_type": "group_name" if new_name else "other",
+                "payload": payload,
+            },
+        ), user_info
 
     async def _handle_group_manager_change(self, msg_data: dict) -> Tuple[Seg | None, UserInfo | None]:
         """处理群管理员变动通知"""
         sender_id = msg_data.get("sendId")
         send_nick = msg_data.get("sendNickName", "未知用户")
+        group_id = msg_data.get("groupId")
         content = msg_data.get("content", "")
 
         user_info = UserInfo(
@@ -188,15 +243,30 @@ class NoticeHandler:
         )
 
         # 尝试解析是设置还是取消管理员
+        is_set = None
         try:
             info = json.loads(content)
             is_set = info.get("is_manager") or info.get("set")
-            action = "被设置为管理员" if is_set else "被取消管理员"
-            return Seg(type="text", data=f"（通知：{send_nick} {action}）"), user_info
         except Exception:
             pass
 
-        return Seg(type="text", data=f"（通知：管理员变动）"), user_info
+        sub_type = "set_admin" if is_set else ("unset_admin" if is_set is False else "unknown")
+        action = "被设置为管理员" if is_set else ("被取消管理员" if is_set is False else "管理员变动")
+
+        return Seg(
+            type="notify",
+            data={
+                "notice_type": "group_admin_change",
+                "sub_type": sub_type,
+                "payload": {
+                    "user_id": sender_id,
+                    "user_nickname": send_nick,
+                    "group_id": group_id,
+                    "action": action,
+                    "is_set": is_set,
+                },
+            },
+        ), user_info
 
 
 notice_handler = NoticeHandler()
